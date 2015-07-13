@@ -42,7 +42,7 @@ public class App {
 		private String piLevel;
 	}
 
-	App() throws URISyntaxException {
+	App() {
 	}
 
 	private void doUpdate(String apiKey, String projectName, String piLevel) throws IOException,
@@ -79,12 +79,13 @@ public class App {
 			}
 		}
 
-		doRollups(preliminaryEstimates, projectOID, piLevel);
+		updateFeaturePoints(preliminaryEstimates, projectOID);
+		updatePortfolioFeaturePoints(projectOID, "Epic");
+		updatePortfolioFeaturePoints(projectOID, "MultiProgramEpic");
 
 	}
 
-	private void doRollups(Map<String, Integer> preliminaryEstimates, String projectOID,
-			String piLevel) throws IOException {
+	private void updatePortfolioFeaturePoints(String projectOID, String piLevel) throws IOException {
 		QueryRequest piParentRequest = new QueryRequest("PortfolioItem/" + piLevel);
 		if (projectOID != null) {
 			piParentRequest.setProject("/project/" + projectOID);
@@ -103,17 +104,14 @@ public class App {
 				JsonObject piParent = piParentResult.getAsJsonObject();
 				uniqueParents.add(piParent);
 			}
-
 			int rollupPoints = 0;
-
 			for (JsonObject parentPI : uniqueParents) {
-				if (piLevel.equals("Epic")) {
-					rollupPoints = getSizeRollupForFeatures(parentPI, preliminaryEstimates);
-				} else {
-					rollupPoints = getSizeRollupForEpics(parentPI, preliminaryEstimates);
+				try {
+					rollupPoints = getSizeRollupForEpics(parentPI);
+					updateCalculatedRollupPoints(parentPI, rollupPoints);
+				} catch (IOException e) {
+					LOGGER.severe("Could not Update " + parentPI.get("FormattedID").getAsString() + ". Error: " + e.getMessage() );
 				}
-
-				updateCalculatedRollupPoints(parentPI, rollupPoints);
 			}
 		} else {
 			LOGGER.severe("Could not run the query ");
@@ -121,10 +119,11 @@ public class App {
 				LOGGER.severe("Error: " + error);
 			}
 			return;
-		}
+		}		
 	}
 
-	private int getSizeRollupForEpics(JsonObject parentPI, Map<String, Integer> preliminaryEstimates)
+
+	private int getSizeRollupForEpics(JsonObject parentPI)
 			throws IOException {
 		int epicRollUp = 0;
 		JsonObject epicsInfo = parentPI.getAsJsonObject("Children");
@@ -149,15 +148,16 @@ public class App {
 		return epicRollUp;
 	}
 
-	private int getSizeRollupForFeatures(JsonObject parent,
-			Map<String, Integer> preliminaryEstimates) throws IOException {
-		int featureSizeRollup = 0;
-		JsonObject featuresInfo;
-		featuresInfo = parent.getAsJsonObject("Children");
-		QueryRequest featureRequest = new QueryRequest(featuresInfo);
-		featureRequest.setFetch(new Fetch("FormattedID", "PreliminaryEstimate",
+	private void updateFeaturePoints(Map<String, Integer> preliminaryEstimates, String projectOID) throws IOException {
+		QueryRequest featuresRequest = new QueryRequest("PortfolioItem/Feature");
+		if (projectOID != null) {
+			featuresRequest.setProject("/project/" + projectOID);
+		}
+		featuresRequest.setScopedDown(true);
+		featuresRequest.setScopedDown(true);		
+		featuresRequest.setFetch(new Fetch("FormattedID", "PreliminaryEstimate",
 				"c_CalculatedFeaturePoints", "Name"));
-		QueryResponse featureResponse = api.query(featureRequest);
+		QueryResponse featureResponse = api.query(featuresRequest);
 		if (featureResponse.wasSuccessful()) {
 			int prelimEstimate = 0;
 			for (JsonElement result : featureResponse.getResults()) {
@@ -165,8 +165,11 @@ public class App {
 				if (!feature.get("PreliminaryEstimate").isJsonNull()) {
 					prelimEstimate = preliminaryEstimates.get(feature
 							.getAsJsonObject("PreliminaryEstimate").get("Name").getAsString());
-					updateCalculatedRollupPoints(feature, prelimEstimate);
-					featureSizeRollup += prelimEstimate;
+					try {
+						updateCalculatedRollupPoints(feature, prelimEstimate);
+					} catch (IOException e) {
+						LOGGER.severe("Could not Update Feature " + feature.get("FormattedID").getAsString() + ". Error: " + e.getMessage() );
+					}
 				}
 			}
 		} else {
@@ -174,23 +177,21 @@ public class App {
 			for (String error : featureResponse.getErrors()) {
 				LOGGER.severe("Error: " + error);
 			}
-			return 0;
 		}
 
-		return featureSizeRollup;
 	}
 
-	private void updateCalculatedRollupPoints(JsonObject epic, int calculatedSize)
+	private void updateCalculatedRollupPoints(JsonObject portfolioItem, int calculatedSize)
 			throws IOException {
-		int existingEstimate = epic.get("c_CalculatedFeaturePoints").isJsonNull() ? 0 : epic.get(
+		int existingEstimate = portfolioItem.get("c_CalculatedFeaturePoints").isJsonNull() ? 0 : portfolioItem.get(
 				"c_CalculatedFeaturePoints").getAsInt();
 		if (existingEstimate != calculatedSize) {
 			JsonObject featurePoints = new JsonObject();
 			featurePoints.addProperty("c_CalculatedFeaturePoints", calculatedSize);
-			UpdateRequest update = new UpdateRequest(epic.get("_ref").getAsString(), featurePoints);
+			UpdateRequest update = new UpdateRequest(portfolioItem.get("_ref").getAsString(), featurePoints);
 			UpdateResponse response = api.update(update);
 			if (response.wasSuccessful()) {
-				LOGGER.info("Successfully updated: " + epic.get("FormattedID").getAsString()
+				LOGGER.info("Successfully updated: " + portfolioItem.get("FormattedID").getAsString()
 						+ ". CalcualtedFeaturePoints: " + calculatedSize);
 			} else {
 				for (String error : response.getErrors()) {
@@ -198,13 +199,13 @@ public class App {
 				}
 			}
 		} else {
-			LOGGER.severe("No change in: " + epic.get("FormattedID").getAsString()
+			LOGGER.severe("No change in: " + portfolioItem.get("FormattedID").getAsString()
 					+ ". Original Estimate: " + existingEstimate + ". FeaturePoints: "
 					+ calculatedSize);
 		}
 	}
 
-	public static void main(String[] args) throws URISyntaxException, IOException {
+	public static void main(String[] args) {
 		App app = new App();
 
 		Commander com = app.new Commander();
@@ -219,6 +220,12 @@ public class App {
 					+ " To find out how to generate API Key, visit https://help.rallydev.com/rally-application-manager");
 			return;
 		}
-		app.doUpdate(com.apiKey, com.project, com.piLevel);
+		try {
+			app.doUpdate(com.apiKey, com.project, com.piLevel);
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (URISyntaxException e) {
+			e.printStackTrace();
+		}
 	}
 }
