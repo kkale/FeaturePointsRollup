@@ -90,6 +90,7 @@ public class App {
 			piParentRequest.setProject("/project/" + projectOID);
 		}
 		piParentRequest.setScopedDown(true);
+		piParentRequest.setScopedDown(true);
 		piParentRequest.setQueryFilter(new QueryFilter("Children.ObjectID", "!=", null));
 		piParentRequest.setFetch(new Fetch("Children", "c_CalculatedFeaturePoints", "ObjectID",
 				"FormattedID", "Name", "_ref"));
@@ -190,7 +191,7 @@ public class App {
 			UpdateResponse response = api.update(update);
 			if (response.wasSuccessful()) {
 				LOGGER.info("Successfully updated: " + epic.get("FormattedID").getAsString()
-						+ ". FeaturePoints: " + calculatedSize);
+						+ ". CalcualtedFeaturePoints: " + calculatedSize);
 			} else {
 				for (String error : response.getErrors()) {
 					LOGGER.severe(error);
