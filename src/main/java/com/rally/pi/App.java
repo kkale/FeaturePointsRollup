@@ -38,14 +38,12 @@ public class App {
 		@Parameter(names = "-key", description = "OAuth API key that you want to use to connect to Rally", required = true)
 		private String apiKey;
 
-		@Parameter(names = "-pilevel", description = "The level of portfolio item do you want to roll up to", required = true)
-		private String piLevel;
 	}
 
 	App() {
 	}
 
-	private void doUpdate(String apiKey, String projectName, String piLevel) throws IOException,
+	private void doUpdate(String apiKey, String projectName) throws IOException,
 			URISyntaxException {
 		this.api = new RallyRestApi(new URI("https://rally1.rallydev.com"), apiKey);
 		LOGGER.severe("Version: " + this.api.getWsapiVersion());
@@ -211,17 +209,13 @@ public class App {
 		Commander com = app.new Commander();
 		try {
 			new JCommander(com, args);
-			if (!com.piLevel.equals("Epic") && !com.piLevel.equals("MultiProgramEpic")) {
-				LOGGER.severe("Supported pilevel values are Epic or  MultiProgramEpic");
-				return;
-			}
 		} catch (ParameterException ex) {
 			LOGGER.severe("Usage: java -jar FeaturePointsRollup-1.0-executable.jar -key <Rally API Key> -project <Rally Project> -pilevel <Epic|MultiProgramEpic>\n\t"
 					+ " To find out how to generate API Key, visit https://help.rallydev.com/rally-application-manager");
 			return;
 		}
 		try {
-			app.doUpdate(com.apiKey, com.project, com.piLevel);
+			app.doUpdate(com.apiKey, com.project);
 		} catch (IOException e) {
 			e.printStackTrace();
 		} catch (URISyntaxException e) {
