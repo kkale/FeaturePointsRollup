@@ -93,7 +93,7 @@ public class App {
 		piParentRequest.setQueryFilter(new QueryFilter("Children.ObjectID", "!=", null));
 		piParentRequest.setFetch(new Fetch("Children", "c_CalculatedFeaturePoints", "ObjectID",
 				"FormattedID", "Name", "_ref"));
-		LOGGER.info("Request: " + piParentRequest.toUrl());
+		LOGGER.info("Requesting " + piLevel + ": " + piParentRequest.toUrl());
 		QueryResponse piParentResponse = api.query(piParentRequest);
 		Set<JsonObject> uniqueParents = new HashSet<JsonObject>();
 		if (piParentResponse.wasSuccessful()) {
@@ -105,7 +105,7 @@ public class App {
 			int rollupPoints = 0;
 			for (JsonObject parentPI : uniqueParents) {
 				try {
-					rollupPoints = getSizeRollupForEpics(parentPI);
+					rollupPoints = getSizeRollupForParentPI(parentPI);
 					updateCalculatedRollupPoints(parentPI, rollupPoints);
 				} catch (IOException e) {
 					LOGGER.severe("Could not Update " + parentPI.get("FormattedID").getAsString() + ". Error: " + e.getMessage() );
@@ -121,7 +121,7 @@ public class App {
 	}
 
 
-	private int getSizeRollupForEpics(JsonObject parentPI)
+	private int getSizeRollupForParentPI(JsonObject parentPI)
 			throws IOException {
 		int epicRollUp = 0;
 		JsonObject epicsInfo = parentPI.getAsJsonObject("Children");
@@ -132,7 +132,7 @@ public class App {
 			for (JsonElement result : epicResponse.getResults()) {
 				JsonObject epic = result.getAsJsonObject();
 				if (!epic.get("c_CalculatedFeaturePoints").isJsonNull()) {
-					epicRollUp += epic.getAsJsonObject("c_CalculatedFeaturePoints").getAsInt();
+					epicRollUp += epic.get("c_CalculatedFeaturePoints").getAsInt();
 				}
 			}
 		} else {
@@ -197,7 +197,7 @@ public class App {
 				}
 			}
 		} else {
-			LOGGER.severe("No change in: " + portfolioItem.get("FormattedID").getAsString()
+			LOGGER.info("No change in: " + portfolioItem.get("FormattedID").getAsString()
 					+ ". Original Estimate: " + existingEstimate + ". FeaturePoints: "
 					+ calculatedSize);
 		}
